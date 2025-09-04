@@ -463,6 +463,20 @@
     }
     .section-props .actions { display:flex; gap:0.5rem; flex-wrap: wrap; }
     .muted { color: var(--text-muted); font-size: 0.85rem; }
+    /* Fluent/Apple + Fluent UI inspired enhancements */
+    body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    .btn:focus-visible, .form-input:focus, .form-textarea:focus, .form-select:focus { box-shadow: 0 0 0 3px rgba(99,102,241,0.35); outline: none; }
+    aside.sidebar-left, aside.sidebar-right { resize: horizontal; overflow: auto; min-width: 240px; }
+    .header { backdrop-filter: blur(20px) saturate(160%); background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.5)); }
+    [data-theme="dark"] .header { background: linear-gradient(180deg, rgba(30,41,59,0.74), rgba(30,41,59,0.45)); }
+    .panel { backdrop-filter: blur(14px) saturate(160%); }
+
+    /* Command Palette */
+    .cmdp-body { padding: 0.75rem 1rem; }
+    .cmdp-input { width: 100%; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); }
+    .cmdp-list { margin-top: 0.5rem; max-height: 50vh; overflow: auto; }
+    .cmdp-item { padding: 0.55rem 0.75rem; border-radius: 10px; display:flex; align-items:center; justify-content: space-between; cursor:pointer; }
+    .cmdp-item:hover, .cmdp-item.active { background: var(--surface-hover); color: var(--primary); }
   </style>
 </head>
 <body>
@@ -1024,9 +1038,9 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
           <div class="settings-group">
             <h3 class="settings-group-title"><i class="fas fa-bolt"></i> Actions rapides</h3>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-              <button class="btn btn-primary" id="runPromptBtn2" style="width: 100%;" disabled><i class="fas fa-play"></i> Tester le prompt</button>
+              <button class="btn btn-secondary" id="openCmdPaletteBtn" style="width: 100%;"><i class="fas fa-magnifying-glass"></i> Command Palette (Ctrl/Cmd+K)</button>
               <button class="btn btn-accent" id="openBatchBtn" style="width: 100%;"><i class="fas fa-table"></i> Test par lots (CSV)</button>
-              <button class="btn btn-secondary" id="optimizeAllBtn2" style="width: 100%;"><i class="fas fa-gauge"></i> Optimiser tout</button>
+              <!-- Optimizer button removed to avoid duplicate with preview actions -->
             </div>
           </div>
 
@@ -1165,8 +1179,321 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
     </div>
   </div>
 
+  <!-- Command Palette Modal -->
+  <div class="modal" id="cmdPalette" role="dialog" aria-modal="true" aria-labelledby="cmdTitle">
+    <div class="modal-content" style="max-width: 720px;">
+      <div class="modal-header">
+        <div class="modal-title" id="cmdTitle"><i class="fas fa-magnifying-glass"></i> Command Palette</div>
+        <button class="modal-close" data-close-modal="#cmdPalette"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body cmdp-body">
+        <input id="cmdPaletteInput" class="cmdp-input" type="text" placeholder="Rechercher une commande… (tapez > pour actions)">
+        <div id="cmdPaletteList" class="cmdp-list" role="listbox"></div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <div class="muted">Navigation: ↑/↓ • Valider: Entrée • Fermer: Échap</div>
+        <button class="btn btn-secondary" data-close-modal="#cmdPalette">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     class PromptStudio {
+  buildCommands() {
+    const cmds = [];
+    const add = (id, label, action, icon='fa-circle-dot', section='Général') => cmds.push({id,label,action,icon,section});
+    add('new-prompt','Nouveau prompt', () => this.resetEditor(), 'fa-file-circle-plus');
+    add('run-prompt','Tester le prompt', () => this.testPrompt(), 'fa-play');
+    add('optimize-all','Optimiser tout', () => this.openOptimization(true), 'fa-gauge-high');
+    add('toggle-theme','Basculer thème', () => this.toggleTheme(), 'fa-moon');
+    add('open-batch','Ouvrir test par lots', () => this.openBatch(), 'fa-table');
+    add('save-version','Sauvegarder version', () => this.saveVersion(), 'fa-save');
+    add('compare-ab','Ouvrir comparaison A/B', () => this.openAB(), 'fa-arrows-left-right');
+    add('copy-preview','Copier l’aperçu', () => this.copyToClipboard(), 'fa-copy');
+    add('apply-persona','Appliquer persona', () => this.applyPersona(), 'fa-user-tie', 'Persona');
+    return cmds;
+  }
+
+  openCommandPalette() {
+    const modal = document.getElementById('cmdPalette');
+    const input = document.getElementById('cmdPaletteInput');
+    const list = document.getElementById('cmdPaletteList');
+    if (!modal) return;
+    const render = (q='') => {
+      const str = (q||'').toLowerCase();
+      list.innerHTML = '';
+      const filtered = this.commands.filter(c => c.label.toLowerCase().includes(str) || c.section.toLowerCase().includes(str));
+      filtered.forEach((c,i) => {
+        const item = document.createElement('div');
+        item.className = 'cmdp-item';
+        item.setAttribute('role','option');
+        item.innerHTML = `<div style="display:flex; gap:.5rem; align-items:center;"><i class="fas ${c.icon}"></i><strong>${this.escape(c.label)}</strong></div><span class="muted">${this.escape(c.section)}</span>`;
+        item.addEventListener('click', () => { c.action(); modal.classList.remove('active'); });
+        list.appendChild(item);
+        if (i===0) item.classList.add('active');
+      });
+    };
+    modal.classList.add('active');
+    render('');
+    setTimeout(()=>{ input?.focus(); input?.select(); }, 50);
+    let idx = 0;
+    const keyHandler = (e) => {
+      const items = Array.from(list.querySelectorAll('.cmdp-item'));
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx=Math.min(items.length-1, idx+1); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); idx=Math.max(0, idx-1); }
+      if (e.key === 'Enter') { e.preventDefault(); items[idx]?.click(); cleanup(); }
+      if (e.key === 'Escape') { cleanup(); }
+      items.forEach(el=>el.classList.remove('active')); items[idx]?.classList.add('active');
+    };
+    const inputHandler = (e) => { idx=0; render(e.target.value.replace(/^>/,'')); };
+    const cleanup = () => {
+      modal.classList.remove('active');
+      input?.removeEventListener('input', inputHandler);
+      document.removeEventListener('keydown', keyHandler);
+    };
+    input?.addEventListener('input', inputHandler);
+    document.addEventListener('keydown', keyHandler);
+  }
+
+      enrichStrategies() {
+        const generic = (title) => `But: Appliquer la stratégie ${title} avec rigueur et traçabilité.
+Entrées:
+- Contexte du problème
+- Contraintes/objectif mesurable
+- Données d'appui si disponibles
+
+Procédure détaillée:
+1) Reformuler le problème et le cadrer en 1-2 phrases.
+2) Établir hypothèses clés et critères de succès.
+3) Exécuter la méthode ${title} pas à pas en limitant les sauts logiques.
+4) Produire une sortie structurée avec décisions justifiées.
+
+Heuristiques d'arrêt:
+- Les critères de succès sont satisfaits
+- Plus d'amélioration marginale visible
+
+Vérifications qualité:
+- Cohérence globale et absence de contradictions
+- Traçabilité des étapes, formatage propre
+- Réponse actionnable et mesurable
+
+Modes:
+- Compact: 5-8 lignes, essentiel et directement exploitable
+- Exhaustif: tous les raisonnements et alternatives utiles
+
+Anti-patterns:
+- Verbiage non justifié, étapes opaques, conclusions non fondées.`;
+
+        const playbooks = {
+          cot: `But: Résolution par raisonnement explicite (Chain-of-Thought).
+Pré-requis:
+- Objectif clair + métriques
+- Contraintes explicites
+
+Étapes:
+1) Décomposer le problème en sous-problèmes atomiques.
+2) Résoudre chaque sous-problème avec justification.
+3) Réconcilier les résultats et expliciter les compromis.
+4) Formuler la réponse finale avec résumé et prochaines actions.
+
+Qualité:
+- Chaque étape doit avoir une raison et un résultat.
+- Pas de saut logique.
+
+Sortie:
+- Bref récapitulatif, étapes numérotées, solution finale.
+- Bloc JSON optionnel des décisions clés: {"hypotheses":[], "steps":[], "decision":"..."}.`,
+          thot: `But: Maintenir un fil de pensée persistant sur plusieurs tours (Thread-of-Thought).
+Étapes:
+1) Rappel synthétique du contexte à chaque tour.
+2) Formuler le prochain pas avec justification.
+3) Tenir un journal des décisions (méta-mémoire).
+4) Résumer périodiquement l'état et les TODOs.
+Sortie: journal compact + proposition d'action immédiate.`,
+          ltm: `But: Du simple au complexe (Least-to-Most).
+Étapes:
+1) Lister les sous-problèmes du plus facile au plus dur.
+2) Résoudre les faciles pour créer des briques.
+3) Composer vers la solution complexe en intégrant les briques.
+4) Vérifier cohérence globale et échecs éventuels.`,
+          tot: `But: Explorer et évaluer plusieurs branches (Tree-of-Thoughts).
+Étapes:
+1) Générer 2-4 branches indépendantes.
+2) Pour chaque branche: forces/faiblesses/risques.
+3) Évaluer selon critères (coût, risque, impact, temps).
+4) Sélectionner la meilleure, fusionner éléments utiles des autres.
+Sortie: tableau comparatif + plan retenu.`,
+          got: `But: Représenter les idées en graphe (Graph-of-Thoughts).
+Étapes:
+1) Noeuds = idées/états, Arêtes = dépendances.
+2) Annoter coûts/bénéfices par arête.
+3) Trouver parcours optimal (ex: plus court/plus robuste).
+4) Traduire le parcours en plan d'action.
+Sortie: liste des noeuds/liaisons + chemin retenu.`,
+          sc: `But: Obtenir robustesse via self-consistency.
+Étapes:
+1) Générer N variantes (≥3) avec seeds différents.
+2) Mesurer la cohérence vs critères (règles, tests simples).
+3) Voter/agréger la meilleure réponse.
+Sortie: score par variante + décision finale.`,
+          cbp: `But: Complexity-Based Prompting.
+Étapes:
+1) Inclure au moins un exemple complexe (few-shot).
+2) Forcer justification multi-étapes.
+3) Exiger validation (tests, règles) en fin de réponse.
+Sortie: réponse + bloc "validation".`,
+          react: `But: Alterner Raisonnement / Action (ReAct).
+Boucle:
+- Thought: exposer brièvement la réflexion.
+- Act: exécuter une requête/outillage (décrire l'outil).
+- Observe: intégrer le résultat.
+Répéter jusqu'à obtention.
+Sortie: historique Thought/Act/Obs + réponse finale.`,
+          rap: `But: Planification et recherche de plans (Reasoning via Planning).
+Étapes:
+1) Définir états, actions, coûts.
+2) Explorer l'espace (ex: MCTS) sur horizon limité.
+3) Sélectionner plan Pareto-optimal.
+4) Exécuter/itérer avec feedback.
+Sortie: plan séquencé avec jalons & métriques.`,
+          pal: `But: Déléguer calculs à un programme (PAL).
+Étapes:
+1) Isoler les parties calculables.
+2) Définir I/O du programme (exemples rapides).
+3) Exécuter/émuler et capturer sorties.
+4) Intégrer résultats dans la réponse.
+Sortie: pseudo-code + résultats + interprétation.`,
+          stepback: `But: Abstraction avant détails (Step-Back).
+Étapes:
+1) Formuler principes/directives générales.
+2) Décliner sur les cas particuliers.
+3) Vérifier non-contradiction.
+Sortie: principes ➜ application.`,
+          ap: `But: Transfert par analogie.
+Étapes:
+1) Choisir une analogie structurelle pertinente.
+2) Mapper éléments source ➜ cible.
+3) Identifier limites de l’analogie.
+Sortie: analogie + transfert + limites.`,
+          gkp: `But: Générer le socle de connaissances requis.
+Étapes:
+1) Lister connaissances manquantes.
+2) Générer définitions/faits utiles.
+3) Marquer incertitudes.
+Sortie: knowledge-base synthétique + drapeaux d'incertitude.`,
+          s2a: `But: Attention Système 2 (filtrage).
+Étapes:
+1) Lister toutes les infos.
+2) Tagger pertinence (élevée/moyenne/faible).
+3) Ne garder que l'essentiel.
+Sortie: contexte filtré + justification.`,
+          dsp: `But: Stimulus directionnel.
+Étapes:
+1) Définir les indicateurs à susciter.
+2) Créer prompts d'orientation.
+3) Vérifier dérives/effets pervers.
+Sortie: stimuli + garde-fous.`,
+          active: `But: Sélection active d'information.
+Étapes:
+1) Identifier incertitudes/besoins.
+2) Poser 3-5 questions ciblées.
+3) Affiner le plan.
+Sortie: Q/R ➜ plan affiné.`,
+          reflexion: `But: Auto-critique et révision.
+Étapes:
+1) Générer un brouillon.
+2) Produire une critique structurée (rubrique).
+3) Appliquer corrections.
+Sortie: v1 ➜ critique ➜ v2.`,
+          meta: `But: Améliorer le prompt lui-même.
+Étapes:
+1) Diagnostiquer les faiblesses (ambigüités, longueur, manque de critères).
+2) Réécrire avec contraintes mesurables.
+3) Valider par mini-tests.
+Sortie: prompt v1/v2 + diffs.`,
+          bootstrap: `But: Amorçage itératif sans annotation.
+Étapes:
+1) Générer.
+2) Corriger erreurs évidentes.
+3) Régénérer guidé par les corrections.
+Sortie: traces d'itérations + version stable.`,
+          vae: `But: Vérifier puis éditer (Verify-and-Edit).
+Étapes:
+1) Générer la sortie.
+2) Passer une grille de vérification (tests/règles).
+3) Appliquer un patch minimal.
+Sortie: rapport de vérif + patch + sortie finale.`,
+          recursive: `But: Raffinement successif.
+Étapes:
+1) Définir critères d'arrêt.
+2) Itérer: évaluer ➜ améliorer.
+3) Sauver checkpoints.
+Sortie: historique des itérations + version finale.`,
+          sot: `But: Squelette d'abord (Skeleton-of-Thought).
+Étapes:
+1) Lister les points clés (1 ligne/point).
+2) Développer chaque point en parallèle.
+3) Synchroniser et harmoniser.
+Sortie: skeleton ➜ développement.`,
+          scratchpad: `But: Montrer le travail (scratchpad).
+Étapes:
+1) Réserver une zone de calcul.
+2) Y inscrire les étapes intermédiaires.
+3) Nettoyer avant rendu final (si requis).
+Sortie: scratchpad + réponse propre.`,
+          chain: `But: Chaîner des prompts.
+Étapes:
+1) Décomposer en sous-prompts séquentiels.
+2) Définir interfaces (I/O) entre maillons.
+3) Orchestrer et agréger les sorties.
+Sortie: pipeline + résultats.`,
+          persona: `But: Adapter le rôle.
+Étapes:
+1) Définir expertise/ton/contraintes.
+2) Appliquer aux décisions et au style.
+3) Rester cohérent sur toute la sortie.
+Sortie: réponses conformes au rôle.`,
+          emotion: `But: Injecter la nuance émotionnelle correcte.
+Étapes:
+1) Choisir l'émotion et l'intensité adéquates.
+2) Ajouter signaux subtils (lexique, rythme).
+3) Vérifier convenance contexte/audience.
+Sortie: texte expressif mais professionnel.`,
+          cont: `But: Comparer et trancher (contrastif).
+Étapes:
+1) Générer 2-3 alternatives distinctes.
+2) Comparer critères objectifs.
+3) Choisir et justifier.
+Sortie: tableau comparatif + décision.`,
+          mai: `But: Approche maïeutique.
+Étapes:
+1) Poser questions progressives (du général au précis).
+2) Faire émerger hypothèses de l'utilisateur.
+3) Reformuler et conclure.
+Sortie: Q/R guidées + synthèse.`,
+          mmcot: `But: CoT multimodal.
+Étapes:
+1) Décrire brièvement l'entrée visuelle (structure, régions).
+2) Raisonner étape par étape avec références aux éléments visuels.
+3) Conclure avec vérifications croisées texte↔vision.
+Sortie: raisonnement multimodal clair.`
+        };
+
+        Object.entries(this.strategies).forEach(([k, it]) => {
+          const extra = playbooks[k] || generic(it.title);
+          const resume = it.content || '';
+          it.content = `${resume}\n\n====================\nPLAYBOOK DÉTAILLÉ\n====================\n${extra}\n\nChecklist de sortie:\n- [ ] Objectif satisfait\n- [ ] Étapes traçables\n- [ ] Critères/mesures fournis\n- [ ] Décisions justifiées\n- [ ] Prochaines actions claires`;
+        });
+
+        // Déduplication basique
+        const seen = new Set();
+        Object.keys(this.strategies).forEach(k => {
+          const c = this.strategies[k].content;
+          const sig = c.trim();
+          if (seen.has(sig)) delete this.strategies[k]; else seen.add(sig);
+        });
+      }
+
       constructor() {
         this.state = {
           prompts: [],
@@ -1196,6 +1523,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         this.personas = this.initPersonas();
         this.libraryData = this.initLibrary();
         this.strategies = this.initStrategies();
+        this.enrichStrategies();
         this.init();
       }
 
@@ -1207,7 +1535,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         // Toujours garantir la présence de la section thinking (non retirable)
         this.ensureThinkingSection();
         this.setupEventListeners();
-        this.initializeUI();
+        this.initializeUI(); this.commands = this.buildCommands(); this.enrichStrategies();
         this.startAutoSave();
       }
 
@@ -1457,7 +1785,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         });
         document.getElementById('toggleThemeBtn')?.addEventListener('click', () => this.toggleTheme());
         document.getElementById('keyboardHelp')?.addEventListener('click', () => {
-          this.showToast('Raccourcis: Ctrl/Cmd+S (Sauver) • Ctrl/Cmd+Enter (Tester) • Ctrl/Cmd+K (Recherche)', 'info');
+          this.showToast('Raccourcis: Ctrl/Cmd+S (Sauver) • Ctrl/Cmd+Enter (Tester) • Ctrl/Cmd+K (Palette de commandes)', 'info');
         });
         document.getElementById('aboutBtn')?.addEventListener('click', () => {
           this.showToast('LLM Prompt Studio Pro — Monofichier HTML. Simulation sans appel API.', 'info');
@@ -1471,14 +1799,14 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
 
         // Run prompt buttons
         document.getElementById('runPromptBtn')?.addEventListener('click', () => this.testPrompt());
-        document.getElementById('runPromptBtn2')?.addEventListener('click', () => this.testPrompt());
+        // runPromptBtn2 removed from Quick Actions to reduce duplication
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
           if (e.ctrlKey || e.metaKey) {
             if (e.key.toLowerCase() === 's') { e.preventDefault(); this.savePrompt(); }
             if (e.key.toLowerCase() === 'enter') { e.preventDefault(); this.testPrompt(); }
-            if (e.key.toLowerCase() === 'k') { e.preventDefault(); document.getElementById('searchInput')?.focus(); }
+            if (e.key.toLowerCase() === 'k') { e.preventDefault(); this.openCommandPalette(); }
           }
         });
 
@@ -1508,7 +1836,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         document.getElementById('copyPreviewBtn')?.addEventListener('click', () => this.copyToClipboard());
         document.getElementById('streamPreviewBtn')?.addEventListener('click', () => this.simulatePreviewStream());
         document.getElementById('optimizeAllBtn')?.addEventListener('click', () => this.openOptimization(true));
-        document.getElementById('optimizeAllBtn2')?.addEventListener('click', () => this.openOptimization(true));
+        // optimizeAllBtn2 removed to avoid duplication; use preview Optimize Tout
         document.getElementById('optimizeBtn')?.addEventListener('click', () => this.openOptimization(false));
 
         // Text changes
@@ -1605,6 +1933,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
 
         // Batch tests
         document.getElementById('openBatchBtn')?.addEventListener('click', () => this.openBatch());
+        document.getElementById('openCmdPaletteBtn')?.addEventListener('click', () => this.openCommandPalette());
         document.getElementById('batchRule')?.addEventListener('change', (e) => {
           document.getElementById('batchKeywordWrap').style.display = e.target.value === 'keyword' ? 'block' : 'none';
         });
@@ -2239,11 +2568,10 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         const hasUser = (document.getElementById('prompt-textarea')?.value || '').trim().length > 0;
         const disabled = (!hasUser) || missingVars > 0;
         const btn1 = document.getElementById('runPromptBtn');
-        const btn2 = document.getElementById('runPromptBtn2');
-        btn1.disabled = disabled || this.state.isRunning;
-        btn2.disabled = disabled || this.state.isRunning;
-        btn1.title = disabled ? 'Complétez le prompt et les variables' : 'Tester le prompt';
-        btn2.title = btn1.title;
+        if (btn1) {
+          btn1.disabled = disabled || this.state.isRunning;
+          btn1.title = disabled ? 'Complétez le prompt et les variables' : 'Tester le prompt';
+        }
       }
 
       // Theme
@@ -2267,9 +2595,8 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         const btn = document.getElementById('runPromptBtn');
         const label = document.getElementById('runPromptLabel');
         const spinner = document.getElementById('runSpinner');
-        const btn2 = document.getElementById('runPromptBtn2');
         this.state.isRunning = true;
-        btn.disabled = true; btn2.disabled = true; spinner.style.display = 'inline-block'; label.textContent = 'Exécution...';
+        if (btn) btn.disabled = true; spinner.style.display = 'inline-block'; label.textContent = 'Exécution...';
 
         this.state.apiUsage.req = Math.min(500, this.state.apiUsage.req + 1);
         this.updateApiUsageBars();
@@ -2283,7 +2610,7 @@ Le tout doit être adapté pour l'industrie {{industry}} et cibler {{target_audi
         this.updateApiUsageBars();
 
         const finish = () => {
-          btn.disabled = false; btn2.disabled = false; spinner.style.display = 'none'; label.textContent = 'Tester le prompt';
+          if (btn) btn.disabled = false; spinner.style.display = 'none'; label.textContent = 'Tester le prompt';
           this.state.isRunning = false;
           this.refreshRunButtons();
           this.showToast('Test terminé (simulation)', 'success');
