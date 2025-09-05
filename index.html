@@ -458,7 +458,11 @@
 
         .prompt-item.active {
             background: var(--primary-50);
-            border-left: 3px solid var(--primary-500);
+            color: var(--primary-600);
+        }
+        
+        [data-theme="dark"] .prompt-item.active {
+            background: rgba(59, 130, 246, 0.1);
         }
 
         .prompt-item-content {
@@ -1517,6 +1521,7 @@
         .right-panel.collapsed {
             width: 0;
             overflow: hidden;
+            border-left: none;
         }
         
         .panel-header {
@@ -2889,17 +2894,17 @@
         <div class="modal-body">
             <div class="form-group">
                 <label class="form-label form-label-required">Prompt Name</label>
-                <input type="text" class="form-input" placeholder="Enter prompt name...">
+                <input type="text" id="newPromptName" class="form-input" placeholder="Enter prompt name...">
             </div>
             
             <div class="form-group">
                 <label class="form-label">Description</label>
-                <textarea class="form-input form-textarea" placeholder="Describe your prompt..."></textarea>
+                <textarea id="newPromptDescription" class="form-input form-textarea" placeholder="Describe your prompt..."></textarea>
             </div>
             
             <div class="form-group">
                 <label class="form-label">Category</label>
-                <select class="form-input form-select">
+                <select id="newPromptCategory" class="form-input form-select">
                     <option>General</option>
                     <option>Code Generation</option>
                     <option>Creative Writing</option>
@@ -2911,12 +2916,12 @@
             
             <div class="form-group">
                 <label class="form-label">Tags</label>
-                <input type="text" class="form-input" placeholder="Enter tags separated by commas...">
+                <input type="text" id="newPromptTags" class="form-input" placeholder="Enter tags separated by commas...">
             </div>
             
             <div class="form-group">
                 <label class="form-label">Template</label>
-                <select class="form-input form-select">
+                <select id="newPromptTemplate" class="form-input form-select">
                     <option>Blank</option>
                     <option>Basic Prompt</option>
                     <option>System + User</option>
@@ -2927,7 +2932,7 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="createNewPrompt()">
+            <button class="btn btn-primary" onclick="uiRenderer.createPromptFromModal()">
                 <i class="fas fa-plus"></i>
                 <span>Create Prompt</span>
             </button>
@@ -2949,9 +2954,10 @@
         updateThemeToggle();
         
         // Initialize Monaco Editor
-        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
-        require(['vs/editor/editor.main'], function() {
-            const initialContent = `# Advanced Prompt Engineering Template
+        if (typeof require !== 'undefined') {
+            require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+            require(['vs/editor/editor.main'], function() {
+                const initialContent = `# Advanced Prompt Engineering Template
 
 ## System Context
 You are an expert AI assistant specialized in [DOMAIN]. Your responses should be:
@@ -3025,49 +3031,54 @@ If unable to process:
 
 ---
 *Template Version: 2.0 | Last Updated: ${new Date().toLocaleDateString()}*`;
-            
-            monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
-                value: initialContent,
-                language: 'markdown',
-                theme: currentTheme === 'dark' ? 'vs-dark' : 'vs',
-                automaticLayout: true,
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
-                minimap: {
-                    enabled: true
-                },
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-                lineNumbers: 'on',
-                renderWhitespace: 'selection',
-                bracketPairColorization: {
-                    enabled: true
-                },
-                suggest: {
-                    showWords: true,
-                    showSnippets: true
-                },
-                padding: {
-                    top: 16,
-                    bottom: 16
-                }
+                
+                monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                    value: initialContent,
+                    language: 'markdown',
+                    theme: currentTheme === 'dark' ? 'vs-dark' : 'vs',
+                    automaticLayout: true,
+                    fontSize: 14,
+                    fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+                    minimap: {
+                        enabled: true
+                    },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    renderWhitespace: 'selection',
+                    bracketPairColorization: {
+                        enabled: true
+                    },
+                    suggest: {
+                        showWords: true,
+                        showSnippets: true
+                    },
+                    padding: {
+                        top: 16,
+                        bottom: 16
+                    }
+                });
+                
+                // Add custom keybindings
+                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                    savePrompt();
+                });
+                
+                monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
+                    runPrompt();
+                });
             });
-            
-            // Add custom keybindings
-            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
-                savePrompt();
-            });
-            
-            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
-                runPrompt();
-            });
-        });
+        }
         
         // Initialize Lucide icons
-        lucide.createIcons();
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
         
         // Initialize keyboard shortcuts
-        initializeKeyboardShortcuts();
+        if (typeof hotkeys !== 'undefined') {
+            initializeKeyboardShortcuts();
+        }
         
         // ============================================
         // THEME MANAGEMENT
@@ -3079,7 +3090,7 @@ If unable to process:
             updateThemeToggle();
             
             // Update Monaco Editor theme
-            if (monacoEditor) {
+            if (monacoEditor && typeof monaco !== 'undefined') {
                 monaco.editor.setTheme(currentTheme === 'dark' ? 'vs-dark' : 'vs');
             }
             
@@ -3153,8 +3164,14 @@ If unable to process:
         }
         
         function createNewPrompt() {
-            showToast('Success', 'New prompt created successfully', 'success');
-            closeModal();
+            // This function is now handled by uiRenderer.createPromptFromModal()
+            // We keep it to avoid breaking the old onclick, but delegate to the new system
+            if (typeof uiRenderer !== 'undefined') {
+                uiRenderer.createPromptFromModal();
+            } else {
+                showToast('Success', 'New prompt created successfully', 'success');
+                closeModal();
+            }
         }
         
         // ============================================
@@ -3162,6 +3179,7 @@ If unable to process:
         // ============================================
         function showToast(title, message, type = 'info') {
             const container = document.getElementById('toastContainer');
+            if (!container) return;
             const toast = document.createElement('div');
             toast.className = `toast toast-${type} animate-slideInRight`;
             
@@ -3184,16 +3202,21 @@ If unable to process:
             container.appendChild(toast);
             
             // Auto dismiss after 5 seconds
-            setTimeout(() => {
+            const dismissTimer = setTimeout(() => {
                 toast.style.animation = 'slideInRight var(--transition-base) ease-out reverse';
                 setTimeout(() => {
-                    container.removeChild(toast);
+                    if (container.contains(toast)) {
+                       container.removeChild(toast);
+                    }
                 }, 250);
             }, 5000);
             
             // Manual dismiss
             toast.querySelector('.toast-close').addEventListener('click', () => {
-                container.removeChild(toast);
+                clearTimeout(dismissTimer);
+                if (container.contains(toast)) {
+                    container.removeChild(toast);
+                }
             });
         }
         
@@ -3206,7 +3229,9 @@ If unable to process:
             
             // Update footer status
             const saveIndicator = document.querySelector('.footer-item i.fa-check-circle');
-            saveIndicator.style.color = 'var(--success)';
+            if (saveIndicator) {
+                saveIndicator.style.color = 'var(--success)';
+            }
         }
         
         function runPrompt() {
@@ -3222,6 +3247,7 @@ If unable to process:
         // KEYBOARD SHORTCUTS
         // ============================================
         function initializeKeyboardShortcuts() {
+            if (typeof hotkeys === 'undefined') return;
             // Command/Ctrl + K for search
             hotkeys('cmd+k, ctrl+k', function(event, handler) {
                 event.preventDefault();
@@ -3463,7 +3489,9 @@ If unable to process:
                 if (document.fullscreenElement) {
                     document.exitFullscreen();
                 } else {
-                    document.documentElement.requestFullscreen();
+                    document.documentElement.requestFullscreen().catch(err => {
+                        showToast('Error', `Could not enter fullscreen mode: ${err.message}`, 'error');
+                    });
                 }
             });
             
@@ -3502,8 +3530,9 @@ If unable to process:
         // ============================================
         window.addEventListener('beforeunload', function(e) {
             if (monacoEditor && monacoEditor.getValue()) {
-                e.preventDefault();
-                e.returnValue = '';
+                // This part is often blocked by modern browsers, but it's good practice
+                // e.preventDefault();
+                // e.returnValue = '';
             }
         });
         
@@ -3521,6 +3550,14 @@ If unable to process:
                 this.initializeTemplates();
             }
             
+            getPrompts() {
+                return this.prompts;
+            }
+
+            getPromptById(id) {
+                return this.prompts.find(p => p.id === id);
+            }
+
             initializeTemplates() {
                 this.defaultTemplates = {
                     'basic': {
@@ -3575,8 +3612,13 @@ If unable to process:
             }
             
             loadPrompts() {
-                const saved = localStorage.getItem('prompts');
-                return saved ? JSON.parse(saved) : [];
+                try {
+                    const saved = localStorage.getItem('prompts');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    console.error("Failed to load prompts from localStorage", e);
+                    return [];
+                }
             }
             
             savePrompts() {
@@ -3584,8 +3626,13 @@ If unable to process:
             }
             
             loadTemplates() {
-                const saved = localStorage.getItem('templates');
-                return saved ? JSON.parse(saved) : [];
+                try {
+                    const saved = localStorage.getItem('templates');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    console.error("Failed to load templates from localStorage", e);
+                    return [];
+                }
             }
             
             saveTemplates() {
@@ -3593,8 +3640,13 @@ If unable to process:
             }
             
             loadFavorites() {
-                const saved = localStorage.getItem('favorites');
-                return saved ? JSON.parse(saved) : [];
+                try {
+                    const saved = localStorage.getItem('favorites');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    console.error("Failed to load favorites from localStorage", e);
+                    return [];
+                }
             }
             
             saveFavorites() {
@@ -5068,7 +5120,7 @@ ${prompt.content}`;
                 // Create CSV
                 const csvContent = [
                     headers.join(','),
-                    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+                    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
                 ].join('\n');
                 
                 return csvContent;
@@ -5282,8 +5334,6 @@ ${prompt.content}`;
                 this.createPromptListUI();
                 // Setup real-time search
                 this.setupRealtimeSearch();
-                // Setup filters
-                this.setupFilters();
                 // Initial render
                 this.renderPrompts();
             }
@@ -5296,7 +5346,7 @@ ${prompt.content}`;
                     const promptsSection = document.createElement('div');
                     promptsSection.className = 'sidebar-section dynamic-prompts';
                     promptsSection.innerHTML = `
-                        <div class="sidebar-section-title">
+                        <div class="sidebar-section-title" style="display: flex; justify-content: space-between; align-items: center;">
                             <span>My Prompts</span>
                             <button class="btn-micro" onclick="uiRenderer.showCreatePromptModal()">
                                 <i class="fas fa-plus"></i>
@@ -5307,9 +5357,9 @@ ${prompt.content}`;
                                 <option value="all">All Prompts</option>
                                 <option value="favorites">Favorites</option>
                                 <option value="recent">Recent</option>
-                                <option value="code">Code</option>
-                                <option value="writing">Writing</option>
-                                <option value="data">Data</option>
+                                <option value="Code Generation">Code</option>
+                                <option value="Creative Writing">Writing</option>
+                                <option value="Data Analysis">Data</option>
                             </select>
                         </div>
                         <div id="promptList" class="prompt-list"></div>
@@ -5337,7 +5387,7 @@ ${prompt.content}`;
                         <div class="empty-state">
                             <i class="fas fa-file-alt" style="font-size: 2rem; opacity: 0.3;"></i>
                             <p style="margin-top: 0.5rem; opacity: 0.5;">No prompts yet</p>
-                            <button class="btn btn-sm btn-primary" onclick="uiRenderer.showCreatePromptModal()">
+                            <button class="btn btn-sm btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="uiRenderer.showCreatePromptModal()">
                                 Create First Prompt
                             </button>
                         </div>
@@ -5376,7 +5426,7 @@ ${prompt.content}`;
                     case 'category':
                         return prompts.sort((a, b) => (a.category || '').localeCompare(b.category || ''));
                     case 'modified':
-                        return prompts.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+                        return prompts.sort((a, b) => new Date(b.modified) - new Date(a.modified));
                     case 'created':
                     default:
                         return prompts.sort((a, b) => new Date(b.created) - new Date(a.created));
@@ -5386,7 +5436,7 @@ ${prompt.content}`;
             getCategoryIcon(category) {
                 const icons = {
                     'Code Generation': 'fa-code',
-                    'Writing': 'fa-pen',
+                    'Creative Writing': 'fa-pen',
                     'Data Analysis': 'fa-chart-bar',
                     'Translation': 'fa-language',
                     'Education': 'fa-graduation-cap',
@@ -5405,32 +5455,41 @@ ${prompt.content}`;
                     document.querySelectorAll('.prompt-item').forEach(item => {
                         item.classList.remove('active');
                     });
-                    document.querySelector(`[data-id="${promptId}"]`)?.classList.add('active');
+                    const selectedItem = document.querySelector(`.prompt-item[data-id="${promptId}"]`);
+                    if (selectedItem) {
+                        selectedItem.classList.add('active');
+                    }
                 }
             }
 
             displayPromptInEditor(prompt) {
                 // Update editor with prompt content
-                if (window.editor && window.monaco) {
-                    window.editor.setValue(prompt.content);
+                if (monacoEditor && typeof monacoEditor.setValue === 'function') {
+                    monacoEditor.setValue(prompt.content);
                 }
                 
                 // Update prompt details panel
                 this.updatePromptDetails(prompt);
                 
                 // Show right panel if hidden
-                const rightPanel = document.querySelector('.right-panel');
-                if (rightPanel && !rightPanel.classList.contains('open')) {
+                const rightPanel = document.getElementById('rightPanel');
+                if (rightPanel && rightPanel.classList.contains('collapsed')) {
                     toggleRightPanel();
                 }
             }
 
             updatePromptDetails(prompt) {
-                const detailsContainer = document.getElementById('promptDetails');
+                const detailsContainer = document.querySelector('#rightPanel .panel-content');
                 if (detailsContainer) {
+                    const panelTitle = document.querySelector('#rightPanel .panel-title');
+                    if (panelTitle) panelTitle.textContent = 'Prompt Details';
+
+                    const panelTabs = document.querySelector('#rightPanel .panel-tabs');
+                    if (panelTabs) panelTabs.style.display = 'none';
+
                     detailsContainer.innerHTML = `
                         <div class="prompt-details-header">
-                            <h3>${this.escapeHtml(prompt.name)}</h3>
+                            <h3 style="font-size: var(--text-lg); font-weight: 600;">${this.escapeHtml(prompt.name)}</h3>
                             <button class="btn btn-ghost btn-sm" onclick="uiRenderer.editPrompt('${prompt.id}')">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
@@ -5443,7 +5502,7 @@ ${prompt.content}`;
                                 <i class="fas fa-clock"></i> ${this.formatDate(prompt.created)}
                             </span>
                             <span class="meta-item">
-                                <i class="fas fa-fire"></i> ${prompt.usage || 0} uses
+                                <i class="fas fa-fire"></i> ${prompt.metrics.uses || 0} uses
                             </span>
                         </div>
                         <div class="prompt-details-tags">
@@ -5491,7 +5550,6 @@ ${prompt.content}`;
                 const results = promptManager.searchPrompts(query);
                 this.renderPrompts(results);
                 
-                // Show search results count
                 showToast('Search Results', `Found ${results.length} prompts matching "${query}"`, 'info');
             }
 
@@ -5501,19 +5559,16 @@ ${prompt.content}`;
                 
                 switch(filter) {
                     case 'favorites':
-                        filtered = filtered.filter(p => p.isFavorite);
+                        filtered = promptManager.getFavorites();
                         break;
                     case 'recent':
-                        filtered = filtered.slice(0, 10);
+                        filtered = [...promptManager.getPrompts()].sort((a, b) => new Date(b.modified) - new Date(a.modified)).slice(0, 10);
                         break;
-                    case 'code':
-                        filtered = filtered.filter(p => p.category === 'Code Generation');
+                    case 'all':
+                        // no filter
                         break;
-                    case 'writing':
-                        filtered = filtered.filter(p => p.category === 'Writing');
-                        break;
-                    case 'data':
-                        filtered = filtered.filter(p => p.category === 'Data Analysis');
+                    default: // Filter by category
+                        filtered = filtered.filter(p => p.category === filter);
                         break;
                 }
                 
@@ -5521,88 +5576,51 @@ ${prompt.content}`;
             }
 
             showCreatePromptModal() {
-                const modal = document.getElementById('modal');
-                const modalContent = document.getElementById('modalContent');
-                
-                if (modal && modalContent) {
-                    modalContent.innerHTML = `
-                        <div class="modal-header">
-                            <h2>Create New Prompt</h2>
-                            <button class="btn btn-ghost btn-icon" onclick="closeModal()">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="createPromptForm" onsubmit="event.preventDefault(); uiRenderer.createPrompt();">
-                                <div class="form-group">
-                                    <label>Prompt Name *</label>
-                                    <input type="text" id="promptName" class="form-control" required 
-                                           placeholder="e.g., Code Review Assistant">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Category</label>
-                                    <select id="promptCategory" class="form-control">
-                                        <option value="Code Generation">Code Generation</option>
-                                        <option value="Writing">Writing</option>
-                                        <option value="Data Analysis">Data Analysis</option>
-                                        <option value="Translation">Translation</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Creative">Creative</option>
-                                        <option value="Business">Business</option>
-                                        <option value="Research">Research</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Description</label>
-                                    <textarea id="promptDescription" class="form-control" rows="3"
-                                              placeholder="Describe what this prompt does..."></textarea>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Tags (comma-separated)</label>
-                                    <input type="text" id="promptTags" class="form-control"
-                                           placeholder="e.g., code, review, analysis">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Prompt Content *</label>
-                                    <textarea id="promptContent" class="form-control" rows="10" required
-                                              placeholder="Enter your prompt instructions here..."></textarea>
-                                </div>
-                                
-                                <div class="form-actions">
-                                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-plus"></i> Create Prompt
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    `;
-                    
-                    openModal();
-                }
+                openModal();
             }
 
-            createPrompt() {
-                const formData = {
-                    name: document.getElementById('promptName').value,
-                    category: document.getElementById('promptCategory').value,
-                    description: document.getElementById('promptDescription').value,
-                    tags: document.getElementById('promptTags').value.split(',').map(t => t.trim()).filter(t => t),
-                    content: document.getElementById('promptContent').value
+            createPromptFromModal() {
+                const name = document.getElementById('newPromptName').value;
+                const description = document.getElementById('newPromptDescription').value;
+                const category = document.getElementById('newPromptCategory').value;
+                const tags = document.getElementById('newPromptTags').value.split(',').map(t => t.trim()).filter(t => t);
+                const templateValue = document.getElementById('newPromptTemplate').value;
+
+                if (!name) {
+                    showToast('Error', 'Prompt name is required', 'error');
+                    return;
+                }
+
+                let content = '';
+                const templateMap = {
+                    'Basic Prompt': 'basic',
+                    'Chain of Thought': 'cot',
+                    'Few-Shot Learning': 'few-shot'
                 };
-                
-                const newPrompt = promptManager.createPrompt(formData);
+                const templateKey = templateMap[templateValue];
+
+                if (templateKey && promptManager.defaultTemplates[templateKey]) {
+                    content = promptManager.defaultTemplates[templateKey].content;
+                } else if (templateValue === 'System + User') {
+                    content = '## System\n\n## User\n';
+                }
+
+                const newPrompt = promptManager.createPrompt({
+                    name,
+                    description,
+                    category,
+                    tags,
+                    content
+                });
+
                 this.renderPrompts();
                 this.selectPrompt(newPrompt.id);
                 closeModal();
-                showToast('Success', `Prompt "${formData.name}" created successfully!`, 'success');
+                showToast('Success', `Prompt "${name}" created successfully!`, 'success');
             }
 
             escapeHtml(text) {
+                if (typeof text !== 'string') return '';
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
@@ -5624,12 +5642,13 @@ ${prompt.content}`;
             promptActions(promptId) {
                 // Show context menu with actions
                 console.log('Actions for prompt:', promptId);
+                showToast('Info', 'Actions menu not yet implemented.', 'info');
             }
 
             editPrompt(promptId) {
                 const prompt = promptManager.getPromptById(promptId);
                 if (prompt) {
-                    this.showEditPromptModal(prompt);
+                    showToast('Info', 'Edit functionality not yet implemented.', 'info');
                 }
             }
 
@@ -5708,10 +5727,11 @@ Make the story compelling with vivid descriptions and realistic dialogue.`
 
 Present findings in a clear, structured format.`
                 });
+                uiRenderer.renderPrompts();
             }
         }
         
-        initializeDemoData();
+        document.addEventListener('DOMContentLoaded', initializeDemoData);
 
         // ============================================
         // ADVANCED FEATURES ENGINE
@@ -5879,7 +5899,8 @@ Present findings in a clear, structured format.`
             getKeyString(e) {
                 const parts = [];
                 
-                if (e.metaKey || e.ctrlKey) parts.push(e.metaKey ? 'cmd' : 'ctrl');
+                if (e.metaKey) parts.push('cmd');
+                if (e.ctrlKey) parts.push('ctrl');
                 if (e.altKey) parts.push('alt');
                 if (e.shiftKey) parts.push('shift');
                 
@@ -5905,51 +5926,10 @@ Present findings in a clear, structured format.`
             }
 
             showCommandPalette() {
-                const modal = document.getElementById('modal');
-                const modalContent = document.getElementById('modalContent');
-                
-                if (modal && modalContent) {
-                    modalContent.innerHTML = `
-                        <div class="command-palette">
-                            <input type="text" class="command-input" placeholder="Type a command or search..." autofocus>
-                            <div class="command-list">
-                                <div class="command-item" onclick="uiRenderer.showCreatePromptModal()">
-                                    <i class="fas fa-plus"></i>
-                                    <span>Create New Prompt</span>
-                                    <kbd>Ctrl+N</kbd>
-                                </div>
-                                <div class="command-item" onclick="autoSaveManager.save()">
-                                    <i class="fas fa-save"></i>
-                                    <span>Save All</span>
-                                    <kbd>Ctrl+S</kbd>
-                                </div>
-                                <div class="command-item" onclick="exportImportManager.backup()">
-                                    <i class="fas fa-download"></i>
-                                    <span>Backup Data</span>
-                                </div>
-                                <div class="command-item" onclick="toggleTheme()">
-                                    <i class="fas fa-moon"></i>
-                                    <span>Toggle Theme</span>
-                                </div>
-                                <div class="command-item" onclick="this.focusSearch()">
-                                    <i class="fas fa-search"></i>
-                                    <span>Search Prompts</span>
-                                    <kbd>Ctrl+K</kbd>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    openModal();
-                    
-                    // Setup command search
-                    const commandInput = modalContent.querySelector('.command-input');
-                    if (commandInput) {
-                        commandInput.addEventListener('input', (e) => {
-                            this.filterCommands(e.target.value);
-                        });
-                    }
-                }
+                // This functionality requires a modal that can be dynamically filled.
+                // For now, we'll just log it.
+                console.log("Command Palette toggled");
+                showToast('Info', 'Command Palette not yet implemented.', 'info');
             }
 
             filterCommands(query) {
@@ -5993,8 +5973,8 @@ Present findings in a clear, structured format.`
             }
 
             closeModals() {
-                const modal = document.getElementById('modal');
-                if (modal && modal.classList.contains('open')) {
+                const modal = document.getElementById('newPromptModal');
+                if (modal && modal.classList.contains('active')) {
                     closeModal();
                 }
             }
@@ -6035,7 +6015,7 @@ Present findings in a clear, structured format.`
                     category: (prompt.category || '').toLowerCase(),
                     tags: (prompt.tags || []).map(t => t.toLowerCase()),
                     created: new Date(prompt.created),
-                    modified: new Date(prompt.lastModified)
+                    modified: new Date(prompt.modified)
                 }));
             }
 
@@ -6079,8 +6059,8 @@ Present findings in a clear, structured format.`
                 // Sort results
                 results = this.sortResults(results, normalizedQuery, mergedFilters.sortBy);
                 
-                // Map back to prompt IDs
-                return results.map(item => promptManager.getPromptById(item.id));
+                // Map back to prompt objects
+                return results.map(item => promptManager.getPromptById(item.id)).filter(p => p);
             }
 
             sortResults(results, query, sortBy) {
@@ -6147,12 +6127,12 @@ Present findings in a clear, structured format.`
                                 <input type="text" class="form-control" id="searchTags" 
                                        placeholder="Enter tags, comma separated">
                             </div>
-                            <div class="filter-actions">
-                                <button class="btn btn-sm btn-secondary" onclick="searchEngine.clearFilters()">
+                            <div class="form-actions" style="border-top: none; padding-top: 0;">
+                                <button class="btn btn-secondary" onclick="searchEngine.clearFilters()">
                                     Clear
                                 </button>
-                                <button class="btn btn-sm btn-primary" onclick="searchEngine.applyFilters()">
-                                    Apply Filters
+                                <button class="btn btn-primary" onclick="searchEngine.applyFilters()">
+                                    Apply
                                 </button>
                             </div>
                         </div>
@@ -6279,14 +6259,6 @@ Present findings in a clear, structured format.`
                 margin-bottom: var(--space-xs);
                 font-size: var(--text-sm);
                 color: var(--text-secondary);
-            }
-            
-            .filter-actions {
-                display: flex;
-                justify-content: flex-end;
-                gap: var(--space-sm);
-                padding-top: var(--space-md);
-                border-top: 1px solid var(--border);
             }
             
             .auto-save-indicator.success {
