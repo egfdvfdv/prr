@@ -1,0 +1,100 @@
+/* ============================================
+   SECTION EDITOR STYLES
+   ============================================ */
+
+.sections-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+#sectionsContainer {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem;
+    min-height: 100px;
+}
+
+.section-item {
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), outline var(--transition-fast);
+    position: relative;
+}
+
+.section-item.active {
+    background-color: var(--surface-hover);
+    font-weight: 600;
+    color: var(--primary-600);
+}
+
+.section-item:hover {
+    background-color: var(--surface-hover);
+}
+
+.section-item .drag-handle {
+    cursor: grab;
+    color: var(--text-tertiary);
+}
+
+.section-item .section-label {
+    flex-grow: 1;
+}
+
+.section-item .close-section {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--text-tertiary);
+}
+
+.section-item .close-section:hover {
+    background: var(--danger);
+    color: white;
+}
+
+.section-item.sortable-ghost {
+    opacity: 0.4;
+    background: var(--primary-200);
+}
+
+.section-item.sortable-chosen {
+    background: var(--primary-100);
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    background-color: var(--surface);
+    min-width: 160px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1;
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 0;
+}
+
+.dropdown.active .dropdown-menu {
+    display: block;
+}
+
+.dropdown-item {
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+}
+
+.dropdown-item:hover {
+    background-color: var(--surface-hover);
+}
